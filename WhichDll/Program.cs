@@ -277,7 +277,7 @@ WhichDll: Which DLL exports a given function, according to an implib?
             return false;
         }
 
-        static Regex archiveMemberMatch = new Regex(@"DLL name\s+:\s+(\S+)");
+        static Regex dllNameMatch = new Regex(@"DLL name\s+:\s+(\S+)");
         static Regex exportNameMatch = new Regex(@"Symbol name\s+:\s+(\S+)");
 
         private static bool TryGetFullExportName(string line, string exportPrefix, out string fullExportName)
@@ -297,12 +297,12 @@ WhichDll: Which DLL exports a given function, according to an implib?
             return false;
         }
 
-        private static bool TryGetDllName(string line, ref string lastKnowDll)
+        private static bool TryGetDllName(string line, ref string dllName)
         {
-            var match = archiveMemberMatch.Match(line);
+            var match = dllNameMatch.Match(line);
             if (match.Success && match.Groups?.Count > 1)
             {
-                lastKnowDll = match.Groups[1].Value;
+                dllName = match.Groups[1].Value;
                 return true;
             }
 
