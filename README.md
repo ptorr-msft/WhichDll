@@ -1,25 +1,26 @@
 # WhichDll
-A simple tool to find which DLL actual contains an API that is exported
-from an import lib. For example, UWP applications typically link against
-`windowsapp.lib` but this is an "umbrella lib" that contains most of the
-exports supported by the Windows Store. 
+A simple tool to find which DLL actually contains an API that is exported
+from an import library ("implib"). For example, UWP applications typically 
+link against `WindowsApp.lib` but this is an "umbrella library" that contains 
+most of the exports supported by the Windows Store, regardless of where they 
+come from. 
 
-Unlike traditional import libs like `kernel32.lib`, there is no matching
-DLL named `windowsapp.dll`; instead, the APIs are exported by various
+Unlike traditional implibs like `kernel32.lib`, there is no matching
+DLL named `WindowsApp.dll`; instead, the APIs are exported by various
 other DLLs in Windows. So for example to statically reference the API
-`CreateFileFromAppW` from your app, you just link with `windowsapp.lib`. But
-if you wanted to load it dynamically via `LoadLibrary` what DLL would you
+`CreateFileFromAppW` from your app, you just link with `WindowsApp.lib`. But
+if you wanted to load it dynamically via `LoadLibrary`, which DLL would you
 specify? 
 
-This tool uses the SDK tool `dumpbin.exe` to find all the exports in an
-import library and then parses the output to find the desired information.
+`WhichDll` uses the SDK tool `dumpbin.exe` to find all the exports in an
+implib and then parses the output to find the desired information.
 The tool also maps API Sets with implementation DLLs but that is *only* 
-valid on the machine where the tool was called; two different devices
-might have different implementation DLLs (based on Device Family, OS 
-Version, etc.) so you should always use the API Set name at runtime.
+valid on the machine where the tool is invoked; two different devices
+might have different implementation DLLs based on Device Family, OS 
+Version, etc. so you should always use the API Set name at runtime.
 
 Here's an example output looking for `CreateFileFromAppW` in the default
-OneCoreUAP library (see below for full syntax):
+OneCoreUAP import library (see below for full syntax):
 
 ```
 C:\>WhichDll CreateFileFromAppW -nologo
@@ -36,7 +37,7 @@ C:\Windows\System32\>dumpbin /exports windows.storage.onecore.dll | findstr Crea
          15    E 00011CE0 CreateFileFromAppW
 ```
 
-Here is the help output from the tool:
+Here is the full help output from the tool:
 
 ```
 WhichDll: Which DLL exports a given function, according to an implib?
