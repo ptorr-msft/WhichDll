@@ -62,8 +62,7 @@ namespace WhichDll
             if (args.Length < 3 || args[2].ToLowerInvariant().Substring(1) != "nologo")
             {
                 showNonEssentialOutput = true;
-                Console.WriteLine(@"
-WhichDll: Which DLL exports a given function, according to an implib?
+                Console.WriteLine(@"WhichDll: Which DLL exports a given function, according to an implib?
           Source available at https://github.com/ptorr-msft/WhichDll.
 ");
             }
@@ -196,7 +195,7 @@ WhichDll: Which DLL exports a given function, according to an implib?
                                 var realFilename = Win32Interop.GetRealModuleFilename(exportingDll);
                                 if (realFilename != exportingDll)
                                 {
-                                    exportingDll += $" --> {Path.GetFileName(realFilename)} (on local machine)";
+                                    exportingDll += $" --> {Path.GetFileName(realFilename)} on this machine";
                                 }
                             }
 
@@ -279,17 +278,31 @@ WhichDll: Which DLL exports a given function, according to an implib?
 
         static Regex dllNameMatch = new Regex(@"DLL name\s+:\s+(\S+)");
         static Regex exportNameMatch = new Regex(@"Symbol name\s+:\s+(\S+)");
+        static Regex isRegexMatch = new Regex(@"[^a-zA-Z0-9\-_]");
 
         private static bool TryGetFullExportName(string line, string exportPrefix, out string fullExportName)
         {
             var match = exportNameMatch.Match(line);
             if (match.Success && match.Groups?.Count > 1)
             {
-                var comparison = String.Compare(exportPrefix, 0, match.Groups[1].Value, 0, exportPrefix.Length, true);
-                if (comparison == 0)
+                var exportName = match.Groups[1].Value;
+                if (isRegexMatch.Match(exportPrefix).Success)
                 {
-                    fullExportName = match.Groups[1].Value;
-                    return true;
+                    var exportMatch = new Regex(exportPrefix);
+                    if (exportMatch.Match(exportName).Success)
+                    {
+                        fullExportName = exportName;
+                        return true;
+                    }
+                }
+                else
+                {
+                    var comparison = String.Compare(exportPrefix, 0, exportName, 0, exportPrefix.Length, true);
+                    if (comparison == 0)
+                    {
+                        fullExportName = exportName;
+                        return true;
+                    }
                 }
             }
 
@@ -311,30 +324,36 @@ WhichDll: Which DLL exports a given function, according to an implib?
 
         static void Usage()
         {
-            Console.WriteLine(@"Usage: WhichDll <implib> <export-prefix> [-nologo]
+            Console.WriteLine(@"Usage: WhichDll <implib> <export> [-nologo]
 
-For example, to find out which DLL contains CreateFileFromAppW according 
-to OneCoreUap.lib, you can use any of the following:
+By default, the <export> is case-insensitive and will report all functions 
+that match the given prefix. For example, to find out which DLL contains 
+CreateFileFromAppW according to OneCoreUap.lib, you can use any of the 
+following:
 
        WhichDll onecoreuap.lib CreateFileFromAppW
        WhichDll onecoreuap CreateFileFrom
        WhichDll onecoreuap createfile
 
-The export name is case-insensitive and will report all functions that match 
-the given prefix. So, for example, the third command-line above will return
-results for other exports such as CreateFileA, CreateFile2, etc.
+Third command-line above will return results for other exports that begin with
+'createfile' such as CreateFileA, CreateFile2, etc.
+
+You can also use a regular expression for the <export>. For example, the 
+following finds CreateFileFromAppW and a couple of other exports:
+
+       WhichDll onecoreuap Create.*AppW
 
 If the specified DLL is actually an API Set, WhichDll will attempt to locate
-the actual DLL that hosts the API _on_this_machine_; please note that it
+the actual DLL that hosts the API *on this machine*  please note that it
 could resolve to a different DLL on a different machine, so you should not
 depend on this information for anything other than local debugging.
 
-If you specify '-i' as the <implib>, WhichDll will read from stdin. Useful 
-for piping the output of dumpbin (or something else) into the app:
+If you specify '-i' as the <implib>, WhichDll will read from stdin. this can 
+be useful for piping the output of dumpbin (or something else) into the app:
 
        c:\path\to\dumpbin -all c:\path\to\foo.lib | whichdll -i someexport
 
-The '-nologo' switch hides the banner and other non-essential output.");
+The -nologo switch hides the banner and other non-essential output.");
         }
     }
 }
