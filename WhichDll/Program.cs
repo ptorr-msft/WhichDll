@@ -55,26 +55,37 @@ namespace WhichDll
             OtherError,
         }
 
-        static bool showNonEssentialOutput = false;
+        static bool showNonEssentialOutput = true;
 
         static int Main(string[] args)
         {
-            if (args.Length < 3 || args[2].ToLowerInvariant().Substring(1) != "nologo")
+            int argsWithoutNologo = args.Length;
+
+            if (args.Length > 0 && args[args.Length - 1].ToLowerInvariant().Substring(1) == "nologo")
             {
-                showNonEssentialOutput = true;
+                showNonEssentialOutput = false;
+                --argsWithoutNologo;
+            }
+            else
+            {
                 Console.WriteLine(@"WhichDll: Which DLL exports a given function, according to an implib?
           Source available at https://github.com/ptorr-msft/WhichDll.
 ");
             }
 
-            if (args.Length < 2)
+            if (argsWithoutNologo < 1)
             {
                 Usage();
                 return (int)ReturnCode.BadCommandLine;
             }
 
-            var libFilename = args[0];
-            var exportPrefix = args[1];
+            var exportQuery = args[0];
+            string libFilename = "onecoreuap.lib";
+            if (argsWithoutNologo >= 2)
+            {
+                libFilename = args[1];
+            }
+
             TextReader dumpReader = null;
             var result = ReturnCode.OtherError;
             string displayFilename;
@@ -101,8 +112,7 @@ namespace WhichDll
 
             if (dumpReader != null)
             {
-
-                result = ProcessDumpbinOutput(displayFilename, dumpReader, exportPrefix);
+                result = ProcessDumpbinOutput(displayFilename, dumpReader, exportQuery);
             }
 
             return (int)result;
@@ -159,12 +169,12 @@ namespace WhichDll
             return fullPath;
         }
 
-        static ReturnCode ProcessDumpbinOutput(string displayFilename, TextReader output, string exportPrefix)
+        static ReturnCode ProcessDumpbinOutput(string displayFilename, TextReader output, string exportQuery)
         {
             string line;
             string exportingDll = string.Empty;
-            string fullExportName = string.Empty;
             string previousLine = string.Empty;
+            string fullExportName;
             int howManyFound = 0;
 
             try
@@ -185,7 +195,7 @@ namespace WhichDll
                         return returnCode;
                     }
 
-                    if (TryGetFullExportName(line, exportPrefix, out fullExportName))
+                    if (TryGetFullExportName(line, exportQuery, out fullExportName))
                     {
                         if (TryGetDllName(previousLine, ref exportingDll))
                         {
@@ -217,7 +227,7 @@ namespace WhichDll
                 if (showNonEssentialOutput)
                 {
                     Console.WriteLine();
-                    Console.WriteLine($"Found {howManyFound} export(s) matching '{exportPrefix}'.");
+                    Console.WriteLine($"Found {howManyFound} export(s) matching '{exportQuery}' from {displayFilename}.");
                 }
                 return ReturnCode.Success;
             }
@@ -225,7 +235,7 @@ namespace WhichDll
             {
                 if (showNonEssentialOutput)
                 {
-                    Console.WriteLine($"No exports found matching '{exportPrefix}'.");
+                    Console.WriteLine($"No exports found matching '{exportQuery}' from {displayFilename}.");
                 }
                 return ReturnCode.ExportNotFound;
             }
@@ -280,15 +290,15 @@ namespace WhichDll
         static Regex exportNameMatch = new Regex(@"Symbol name\s+:\s+(\S+)");
         static Regex isRegexMatch = new Regex(@"[^a-zA-Z0-9\-_]");
 
-        private static bool TryGetFullExportName(string line, string exportPrefix, out string fullExportName)
+        private static bool TryGetFullExportName(string line, string exportQuery, out string fullExportName)
         {
             var match = exportNameMatch.Match(line);
             if (match.Success && match.Groups?.Count > 1)
             {
                 var exportName = match.Groups[1].Value;
-                if (isRegexMatch.Match(exportPrefix).Success)
+                if (isRegexMatch.Match(exportQuery).Success)
                 {
-                    var exportMatch = new Regex(exportPrefix);
+                    var exportMatch = new Regex(exportQuery);
                     if (exportMatch.Match(exportName).Success)
                     {
                         fullExportName = exportName;
@@ -297,7 +307,7 @@ namespace WhichDll
                 }
                 else
                 {
-                    var comparison = String.Compare(exportPrefix, 0, exportName, 0, exportPrefix.Length, true);
+                    var comparison = String.Compare(exportQuery, 0, exportName, 0, exportQuery.Length, true);
                     if (comparison == 0)
                     {
                         fullExportName = exportName;
@@ -324,16 +334,18 @@ namespace WhichDll
 
         static void Usage()
         {
-            Console.WriteLine(@"Usage: WhichDll <implib> <export> [-nologo]
+            Console.WriteLine(@"Usage: WhichDll <export> [<implib>] [-nologo]
 
 By default, the <export> is case-insensitive and will report all functions 
-that match the given prefix. For example, to find out which DLL contains 
-CreateFileFromAppW according to OneCoreUap.lib, you can use any of the 
-following:
+that match the given prefix. If <implib> is not provided, it defaults to
+onecoreuap.lib.
 
-       WhichDll onecoreuap.lib CreateFileFromAppW
-       WhichDll onecoreuap CreateFileFrom
-       WhichDll onecoreuap createfile
+For example, to find out which DLL contains CreateFileFromAppW according to 
+OneCoreUap.lib, you can use any of the following:
+
+       WhichDll CreateFileFromAppW onecoreuap.lib 
+       WhichDll CreateFileFrom onecoreuap 
+       WhichDll createfile
 
 Third command-line above will return results for other exports that begin with
 'createfile' such as CreateFileA, CreateFile2, etc.
@@ -341,17 +353,18 @@ Third command-line above will return results for other exports that begin with
 You can also use a regular expression for the <export>. For example, the 
 following finds CreateFileFromAppW and a couple of other exports:
 
-       WhichDll onecoreuap Create.*AppW
+       WhichDll Create.*AppW
 
-If the specified DLL is actually an API Set, WhichDll will attempt to locate
-the actual DLL that hosts the API *on this machine*  please note that it
-could resolve to a different DLL on a different machine, so you should not
-depend on this information for anything other than local debugging.
+If the DLL referenced in the implib is actually an API Set, WhichDll will 
+attempt to locate the DLL that hosts the API *on this machine*  please note 
+that it could resolve to a different DLL on a different machine, so you 
+should *not* depend on this information for anything other than local 
+debugging.
 
 If you specify '-i' as the <implib>, WhichDll will read from stdin. this can 
 be useful for piping the output of dumpbin (or something else) into the app:
 
-       c:\path\to\dumpbin -all c:\path\to\foo.lib | whichdll -i someexport
+       c:\path\to\dumpbin -all c:\path\to\foo.lib | whichdll someexport -i
 
 The -nologo switch hides the banner and other non-essential output.");
         }
